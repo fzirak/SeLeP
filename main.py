@@ -95,7 +95,6 @@ def create_affinity_matrix(read_from_file, partition_manager, i='', is_navi=Fals
     if not read_from_file:
         aff_matrix = AffinityMatrix.AffinityMatrix()
         aff_matrix.read_affinities_from_file(
-            f'/home/fzirak/Documents/CasJobs/prefetching/'
             f'{Config.db_name}affinityMatrix{file_suffix}.txt'
         )
         aff_matrix.set_blocks_partition_id(partition_manager)
@@ -116,7 +115,6 @@ def create_par_manager_and_aff_matrix(read_par_manager, read_aff_matrix, table_m
     else:
         partition_manager = PartitionManager.PartitionManager()
         partition_manager.read_partitions_from_file(
-            f'/home/fzirak/Documents/CasJobs/prefetching/'
             f'{Config.db_name}partitions{file_suffix}.txt'
         )
         partition_manager.calculate_partition_encodings(table_manager)
@@ -142,7 +140,7 @@ def create_pm_af_for_configs(read_par_manager, read_aff_matrix, table_manager, s
     else:
         partition_manager = PartitionManager.PartitionManager()
         partition_manager.read_partitions_from_file(
-            f'/home/fzirak/Documents/CasJobs/prefetching/{file_name}'
+            f'{file_name}'
         )
         partition_manager.calculate_partition_encodings(table_manager)
         aff_matrix = AffinityMatrix.AffinityMatrix()
@@ -246,7 +244,7 @@ def adapt_test(config_suffix, method, test_repeat=1, measure_time=False, save_to
 
             if method == 'SGDP':
                 preds = cPickle.load(open(
-                    f'/home/fzirak/Documents/SGDP/predictions/sgdp3_{Config.db_name}_{test}WB{Config.logical_block_size}_preds.p',
+                    f'sgdp3_{Config.db_name}_{test}WB{Config.logical_block_size}_preds.p',
                     'rb'))
                 preds = model_utils.convert_lba_to_bid(preds)
 
@@ -398,7 +396,7 @@ def test_user_other_methods(file_name_, read_from_file, aff_matrix: AffinityMatr
 
     if method == 'SGDP':
         preds = cPickle.load(open(
-            f'/home/fzirak/Documents/SGDP/predictions/sgdp3_{Config.db_name}_{file_name_}WB{Config.logical_block_size}_preds.p',
+            f'sgdp3_{Config.db_name}_{file_name_}WB{Config.logical_block_size}_preds.p',
             'rb'))
         preds = model_utils.convert_lba_to_bid(preds)   
 

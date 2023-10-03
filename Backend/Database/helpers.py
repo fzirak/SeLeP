@@ -98,13 +98,13 @@ def insert_block_to_cache(insertion_dict):
 
 def clear_cache():
     subprocess.call(
-        'echo {} | sudo -S bash /home/fzirak/Desktop/clear_all_caches.sh'.format('Mhmdzrk@83'),
+        'echo {} | sudo -S bash clear_all_caches.sh'.format('pass'),
         shell=True)
 
 
 def clear_sys_cache():
     subprocess.call(
-        'echo {} | sudo -S bash /home/fzirak/Desktop/clear_sys_caches.sh'.format('Mhmdzrk@83'),
+        'echo {} | sudo -S bash clear_sys_caches.sh'.format('pass'),
         shell=True)
 
 

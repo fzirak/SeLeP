@@ -115,7 +115,7 @@ def main(model_name, result_file_name, do_train=0, config_suffix='', test_repeat
             if iteration == initial_iter_no:  # Prepare the data only for the first iteration
                 print('Preparing the data')
                 train_df = pd.read_csv(
-                    f'/home/fzirak/Documents/CasJobs/prefetching/{file_name}.txt',
+                    f'{file_name}.txt',
                     header=0,
                     sep=sep,
                     quoting=csv.QUOTE_ALL,
@@ -173,7 +173,7 @@ def main(model_name, result_file_name, do_train=0, config_suffix='', test_repeat
             file_name = f'{Config.db_name}_{test}{config_suffix}WB{Config.logical_block_size}WP{Config.max_partition_size}'
             # file_name = f'{test}WB{Config.logical_block_size}WP{Config.max_partition_size}' #NAVI
             test_df = pd.read_csv(
-                f'/home/fzirak/Documents/CasJobs/prefetching/{file_name}.txt',
+                f'{file_name}.txt',
                 header=0,
                 sep=sep,
                 quoting=csv.QUOTE_ALL,
@@ -369,7 +369,7 @@ def adaptivity_test_main(model_name, result_file_name, do_train=0, config_suffix
             if iteration == initial_iter_no:  #Prepare the data only for the first iteration
                 print('Preparing the data')
                 train_df = pd.read_csv(
-                    f'/home/fzirak/Documents/CasJobs/prefetching/{file_name}.txt',
+                    f'{file_name}.txt',
                     header=0,
                     sep=sep,
                     quoting=csv.QUOTE_ALL,
@@ -446,7 +446,7 @@ def adaptivity_test_main(model_name, result_file_name, do_train=0, config_suffix
                 ti += 1
                 file_name = f'{Config.db_name}_{test}WB{Config.logical_block_size}WP{Config.max_partition_size}'
                 test_df = pd.read_csv(
-                    f'/home/fzirak/Documents/CasJobs/prefetching/{file_name}.txt',
+                    f'{file_name}.txt',
                     header=0,
                     sep=sep,
                     quoting=csv.QUOTE_ALL,
