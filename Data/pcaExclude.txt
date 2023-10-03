@@ -1,0 +1,26 @@
+siteconstants
+sitedbs
+versions
+--- emptyones ---
+diagnostics
+dr3quasarcatalog
+dr5quasarcatalog
+origfield
+origphotoobjall
+psobjall
+qsoconcordanceall
+queryresults
+region
+sector2tile
+spplines
+sppparams
+targetinfo
+targphotoobjall
+targphototag
+targrunqa
+tilingnote
+uberastro
+ubercal
+--- meaningless ---
+loadhistory
+dbcolumns
