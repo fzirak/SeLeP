@@ -12,5 +12,6 @@ Zirak, Farzaneh, Farhana Choudhury, and Renata Borovica-Gajic. "SeLeP: Learning 
 
 ##
 
-The clay-based partitioning is implemented as a separate Java project located in the 'Partitioning' folder. You can utilize the 'NewMain' class to extract the block IDs accessed by simple queries. For more complex queries you need  to access your Database Cache contents. The 'ServerMainThread' serves as the core for partitions, clustering blocks based on the workload received from clients.
+The clay-based partitioning is implemented as a separate Java project located in the 'Partitioning' folder. You can utilize the 'NewMain' class to extract the block IDs accessed by simple queries. For more complex queries you need  to access your Database Cache contents. The 'ServerMainThread' serves as the core for partitions, clustering blocks based on the workload received from The 'Client'.
+
 To simplify the process, you have the flexibility to create partitions using any algorithms and input them into the SeLeP prefetcher.
