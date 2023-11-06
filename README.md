@@ -7,6 +7,7 @@ We propose a learning-based semantic prefetcher which predicts the subsequent da
 For more details you can refer to our paper.
 
 If you would like to use our code, please cite our paper:
+
 Zirak, Farzaneh, Farhana Choudhury, and Renata Borovica-Gajic. "SeLeP: Learning Based Semantic Prefetching for Exploratory Database Workloads." arXiv preprint arXiv:2310.14666 (2023).
 
 ##
