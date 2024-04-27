@@ -4,10 +4,8 @@ os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 import tensorflow as tf
 from tensorflow import keras
 from keras.layers import Input, LSTM, Dense, RepeatVector, Reshape, Flatten, Concatenate, Embedding, Conv2D, \
-    MaxPooling2D, TimeDistributed
+    MaxPooling2D, TimeDistributed, GRU
 from keras.models import Model, model_from_json, Sequential
-
-
 
 from typing import List
 import pandas as pd
@@ -66,6 +64,7 @@ def create_binary_lstm_model(num_partitions, look_back, rows, cols):
     x, last_h, last_c = LSTM(64, return_state=True, name='enc_lstm_2')(lstm_input)
     x = RepeatVector(1, name='repeat_1')(x)
     x = LSTM(64, return_sequences=True, name='dec_lstm_1')(x, initial_state=[last_h, last_c])
+    x = Dense(units=num_partitions, name='dense_1')(x)
     x = Dense(units=num_partitions, activation='sigmoid', name='dense_2')(x)
     output = Flatten()(x)
 
@@ -74,13 +73,59 @@ def create_binary_lstm_model(num_partitions, look_back, rows, cols):
     return model
 
 
-def create_vanilla_lstm_model(look_back, rows, cols):
+def create_vanilla_lstm_model(num_partitions, look_back, rows, cols):
+    """
+    this function returns a vanilla LSTM model. input shape is (None, lookback, rows*cols).
+    The output shape is (None, num_partitions)
+    """
     data_shape = rows * cols
-    model = Sequential()
-    model.add(LSTM(64, input_shape=(look_back, data_shape), return_sequences=True))
-    model.add(Flatten())
-    model.add(Dense(units=data_shape))
-    model.add(Reshape((1, data_shape)))
+
+    model_input = Input(shape=(look_back, data_shape))
+    x = LSTM(64,  name='lstm_1')(model_input)
+    output = Dense(units=num_partitions, activation='sigmoid', name='dense_1')(x)
+
+    model = Model(inputs=model_input, outputs=output)
+    return model
+
+
+def create_multi_lstm_model(num_partitions, look_back, rows, cols):
+    """
+    this function returns a two layer LSTM model. input shape is (None, lookback, rows*cols).
+    The output shape is (None, num_partitions)
+    """
+    data_shape = rows * cols
+
+    model_input = Input(shape=(look_back, data_shape))
+    x = LSTM(64,  name='lstm_1', return_sequences=True)(model_input)
+    x = LSTM(64,  name='lstm_2', return_sequences=False)(x)
+
+    output = Dense(units=num_partitions, activation='sigmoid', name='dense_1')(x)
+
+    model = Model(inputs=model_input, outputs=output)
+    return model
+
+
+def create_vanilla_gru_model(num_partitions, look_back, rows, cols):
+    data_shape = rows * cols
+
+    model_input = Input(shape=(look_back, data_shape))
+    x = GRU(64,  name='gru_1')(model_input)
+    output = Dense(units=num_partitions, activation='sigmoid', name='dense_1')(x)
+
+    model = Model(inputs=model_input, outputs=output)
+    return model
+
+
+def create_mlp_model(num_partitions, look_back, rows, cols):
+    data_shape = rows * cols
+
+    model_input = Input(shape=(look_back, data_shape))
+    x = Flatten()(model_input)
+    x = Dense(units=128, activation='relu', name='dense_1')(x)
+    x = Dense(units=64, activation='relu', name='dense_2')(x)
+    output = Dense(units=num_partitions, activation='sigmoid', name='dense_3')(x)
+
+    model = Model(inputs=model_input, outputs=output)
     return model
 
 

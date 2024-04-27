@@ -53,6 +53,8 @@ class TraditionalModelWindow:
             if extend_id not in self.trace_map:
                 self.trace_map[extend_id] = []
             self.trace_map[extend_id].append(full_adr)
+            self.last_bid = int(b_adr)
+
 
         elif self.extend_type == 'naive':
             if self.last_bid is None:

@@ -44,7 +44,6 @@ def get_matrix_variables_range(mean_std_matrix):
     return range_low, range_high
 
 
-
 def calculate_block_matrix_encoding(block, encoding_length, num_of_tbs, table_manager):
     erb = np.zeros((num_of_tbs, encoding_length))
     temp = block.rsplit('_', 1)

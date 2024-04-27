@@ -14,6 +14,19 @@ from tqdm import tqdm
 import json
 from datetime import datetime
 
+from keras.preprocessing.text import Tokenizer
+from keras.preprocessing.sequence import pad_sequences
+from keras.models import Sequential, Model
+from keras.layers import Embedding, Conv1D, GlobalMaxPooling1D, Dense
+
+
+from gensim.models import Word2Vec
+
+tokenizer = None
+model = None
+scaler = None
+max_len = None
+
 
 class TablePCA:
     def __init__(self, name, pca_df, eig_values_='', eig_vectors_=''):
@@ -22,45 +35,177 @@ class TablePCA:
         self.eig_values = eig_values_
         self.eig_vectors = eig_vectors_
 
-
-def get_table_data(table_name, removing_features, cursor):
-    sql = 'select * from ' + table_name
-    cursor.execute(sql)
+def get_column_dtype(table_name, cursor):
+    sql ='''
+        SELECT column_name, data_type
+        FROM information_schema.columns
+        WHERE table_name = '{tb}';
+    '''
+    cursor.execute(sql.format(tb=table_name))
     df = pd.DataFrame(cursor.fetchall(), columns=[desc[0] for desc in cursor.description])
 
-    if removing_features:
-        for feature in removing_features:
+    res = {}
+    for idx, row in df.iterrows():
+        res[row['column_name']] = row['data_type']
+    return res
+
+
+def generate_string_encoder(vals, embedding_dim):
+    tokenizer = Tokenizer(char_level=True)
+    tokenizer.fit_on_texts(vals)
+
+    sequences = tokenizer.texts_to_sequences(vals)
+
+    max_len = max(len(seq) for seq in sequences)
+    padded_sequences = pad_sequences(sequences, maxlen=max_len)
+
+    scaler = MinMaxScaler()
+    padded_sequences = scaler.fit_transform(padded_sequences)
+
+    model = Sequential()
+    model.add(Embedding(input_dim=len(tokenizer.word_index) + 1, output_dim=embedding_dim, input_length=max_len))
+    model.add(Conv1D(128, 5, activation='relu'))
+    model.add(GlobalMaxPooling1D())
+    model.add(Dense(embedding_dim, activation='relu'))  # Encoder
+    model.add(Dense(max_len, activation='sigmoid')) 
+
+    model.compile(optimizer='adam', loss='mse', metrics=['accuracy'])
+
+    model.fit(padded_sequences, padded_sequences, epochs=25)
+    encoder_model = Model(inputs=model.input, outputs=model.layers[-2].output)
+
+    return tokenizer, encoder_model, scaler, max_len
+
+
+def smart_get_table_data(table_name, removing_features, cursor, enc_model='w'):
+    if enc_model == 'w':
+        embedding_dim = 8 #32
+    if enc_model == 'c':
+        embedding_dim = 32
+    sql = 'select * from ' + table_name
+    if Config.is_test:
+        sql = sql + ' limit 1000;'
+    cursor.execute(sql)
+    df = pd.DataFrame(cursor.fetchall(), columns=[desc[0] for desc in cursor.description])
+    cols = [desc[0] for desc in cursor.description]
+    col_dtype_dict = get_column_dtype(table_name, cursor)
+    all_str_vals = []
+    str_cols = []
+    
+    for feature in cols:
+        if Config.do_string_encoding:
+            if col_dtype_dict[feature] == 'character varying':
+                str_cols.append(feature)
+            elif 'date' in col_dtype_dict[feature] or 'timestamp' in col_dtype_dict[feature]:
+                df[feature] = df[feature].apply(lambda x: datetime.timestamp(pd.to_datetime(x)) if pd.notnull(x) else 0)
+            elif  'time' in col_dtype_dict[feature]:
+                default_date = datetime(1970, 1, 1) 
+                df[feature] = df[feature].apply(lambda x: datetime.combine(default_date, x))
+                df[feature] = df[feature].astype(int) // 10**9  # Convert nanoseconds to seconds
+        else:
             df = df.drop(feature, axis=1)
-    # else:
-    #     df = df.drop('f_id', axis=1)
+    
+    if len(str_cols) == 0:
+        return df
+    
+    for col in str_cols:
+        df[col] = df[col].fillna('-far-')
+        col_vals = df[col].str.lower().to_list()
+        if enc_model == 'c':
+            all_str_vals = all_str_vals + list(set(col_vals))
+        if enc_model == 'w':
+            all_str_vals.append(list(set(col_vals)))
+    
+    global tokenizer, model, scaler, max_len
+    if enc_model == 'w':
+        model = Word2Vec(all_str_vals, vector_size=embedding_dim, min_count=1)
+        model.build_vocab(all_str_vals)
+        model.train(all_str_vals, total_examples=len(all_str_vals), epochs=10, report_delay=1)
+    
+    if enc_model == 'c':
+        tokenizer, model, scaler, max_len = generate_string_encoder(list(set(all_str_vals)), embedding_dim)
+
+    print(len(df.columns.to_list()))
+    for col in str_cols:
+        if enc_model == 'w':
+            df[col] = df[col].apply(get_word_embedding)
+        if enc_model == 'c':
+            df[col] = df[col].apply(get_character_embedding)
+        df2 = pd.DataFrame(df[col].to_list(), columns=[f'{col}_{i}' for i in range(embedding_dim)])
+        df = pd.concat([df, df2], axis=1)
+        df = df.drop(col, axis=1)
+    print(len(df.columns.to_list()))
 
     return df
+
+
+def get_word_embedding(new_string):
+    global model
+    return model.wv[new_string.lower()]
+
+
+def get_character_embedding(new_string):
+    global tokenizer, model, scaler, max_len
+    new_string = new_string.lower()
+    new_sequence = tokenizer.texts_to_sequences([new_string])
+    new_padded_sequence = pad_sequences(new_sequence, maxlen=max_len)
+    new_padded_sequence = scaler.transform(new_padded_sequence)
+    embedding = model.predict(new_padded_sequence, verbose=3)
+    return embedding[0]
 
 
 def pca_calculator(table_list, removing_features, precision, null_threshold=0.6, var_threshold=0.001):
     tables_pca = []
     conn = get_db_connection()
     cursor = conn.cursor()
-    # success = []
     max_length = 0
+    default_values = [-9999, -999]
     print('Calculating PC values for all tables:')
     for table in tqdm(table_list):
         try:
-            df = get_table_data(table, removing_features.get(table), cursor)
-            null_percentages = df.isnull().mean()
-            columns_to_drop = null_percentages[null_percentages > null_threshold].index.tolist()
-            print(f'{len(columns_to_drop)} NaN columns to drop from {len(df.columns)}')
-            df = df.drop(columns=columns_to_drop)
+            df = smart_get_table_data(table, removing_features.get(table), cursor)
+            if 'Normalize_NoPCA' in Config.tb_encoding_method:
+                df.fillna(0, inplace=True)
+                principal_df = pd.DataFrame(data=MinMaxScaler().fit_transform(df))
+                max_length = max(max_length, principal_df.shape[1])
+                tables_pca.append(TablePCA(table, principal_df))
+                continue
 
-            # if df.shape[1] > 100:
-            variances = df.var()  # or df.std()
-            low_variance_cols = variances[variances < var_threshold].index
-            print(f'{len(low_variance_cols)} low variance columns to drop from {len(df.columns)}')
-            df.drop(columns=low_variance_cols, inplace=True)
+            if 'NoPCA' in Config.tb_encoding_method:
+                df.fillna(0, inplace=True)
+                tables_pca.append(TablePCA(table, df))
+                continue
 
-            # nan_count = df.isnull().sum().sum()
-            # print(f'nan count is {nan_count}')
-            df.fillna(df.mean(), inplace=True)  # it was 0 instead of mean before
+            if 'sdss' in Config.db_name:
+                for col in df.columns:
+                    if df[col].isin(default_values).any():
+                        min_val = df[col][(df[col] != -9999) & (df[col] != -999)].min()
+                        df[col] = np.where((df[col] == -9999) | (df[col] == -999), min_val - 5, df[col])
+
+            if 'PCAOnly' not in Config.tb_encoding_method:
+                null_percentages = df.isnull().mean()
+                columns_to_drop = null_percentages[null_percentages > null_threshold].index.tolist()
+                print(f'{len(columns_to_drop)} NaN columns to drop from {len(df.columns)}')
+                df = df.drop(columns=columns_to_drop)
+
+                variances = df.var()  # or df.std()
+                low_variance_cols = variances[variances < var_threshold].index
+                print(f'{len(low_variance_cols)} low variance columns to drop from {len(df.columns)}')
+                df.drop(columns=low_variance_cols, inplace=True)
+
+            df.fillna(df.mean(), inplace=True)  
+
+            if 'PCAOnly' in Config.tb_encoding_method:
+                precision = Config.encoding_length
+                num_cols_to_add = Config.encoding_length - df.shape[1]
+                if num_cols_to_add > 0:
+                    row_mean = df.mean(axis=1)
+                    print(f'Injecting {num_cols_to_add} columns to {table}')
+                    additional_cols = pd.DataFrame({f'col_{i}': row_mean for i in range(num_cols_to_add+1)})
+                    df = pd.concat([df, additional_cols], axis=1)
+                df.fillna(0, inplace=True) 
+                
+
             scalar = MinMaxScaler()
             # # scalar = StandardScaler()
             x = scalar.fit_transform(df)
@@ -73,7 +218,7 @@ def pca_calculator(table_list, removing_features, precision, null_threshold=0.6,
 
         except Exception as e:
             print('exception for table {} with message: {}'.format(table, e))
-            # break
+            print(e.__repr__())
     print('max num of PCs is: ' + str(max_length))
     return tables_pca
 
@@ -153,19 +298,14 @@ def get_pca_table_info():
         tables = [item for item in Config.table_list]
         feature_exclude_dict = {}
         json_file_path = Config.base_dir + 'Data/tb_col_summary.json'
-        # for tb in tables:
-        #     col_summary = get_non_numeric_cols(tb)
-        #     if len(col_summary) > 0:
-        #         feature_exclude_dict[tb] = col_summary
-        #
-        # with open(json_file_path, 'w') as json_file:
-        #     json.dump(feature_exclude_dict, json_file, indent=4)
-
         with open(json_file_path, 'r') as json_file:
             feature_exclude_dict = json.load(json_file)
+    elif Config.db_name in ['genomic', 'birds']:
+        tables = [item for item in Config.table_list]
+        feature_exclude_dict = {}
     else:
         tables = [item for item in Config.table_list if item not in Config.pca_exclude_tables]
-        feature_exclude_dict = {'chunk': ['targetversion', 'exportversion'], 'dataconstants': ['field', 'name', 'description'], 'dbobjects': ['name', 'type', 'access', 'description', 'text'], 'frame': ['img'], 'history': ['filename', 'date', 'name', 'description'], 'indexmap': ['code', 'type', 'tablename', 'fieldlist', 'foreignkey', 'indexgroup'], 'mask': ['area'], 'match': ['miss'], 'objmask': ['span'], 'partitionmap': ['filegroupname', 'comment'], 'platex': ['expid', 'taihms', 'dateobs', 'timesys', 'quality', 'name', 'program', 'version', 'observer', 'camver', 'spec2dver', 'utilsver', 'spec1dver', 'readver', 'combver', 'fscanmode', 'programname', 'plateversion', 'fscanversion', 'fmapversion'], 'profiledefs': [], 'propermotions': [], 'pubhistory': ['tend', 'name'], 'qsobest': [], 'qsobunch': ['headobjtype'], 'qsocatalogall': ['headobjtype'], 'rc3': ['aliases', 'pgc_name', 'rc2_type', 'rc2_typesource', 'name', 'b_tsource'], 'region2box': ['regiontype', 'boxtype'], 'regionpatch': ['type', 'convexstring'], 'rmatrix': ['mode'], 'sdssconstants': ['name', 'unit', 'description'], 'sector': ['tiles', 'targetversion'], 'segment': ['photoversion', 'targetastroid', 'targetastroversion', 'exportastroid', 'exportastroversion', 'targetfcalibid', 'targetfcalibversion', 'exportfcalibid', 'exportfcalibversion', 'loaderversion', 'objectsource', 'targetsource', 'targetversion', 'photoid'], 'sitediagnostics': ['name', 'type'], 'speclineall': [], 'speclineindex': ['name'], 'specobjall': ['img', 'objtypename'], 'specphotoall': [], 'stetson': ['name'], 'stripedefs': ['hemisphere', 'htmarea'], 'tileall': ['programname', 'completetileversion'], 'tilinggeometry': ['nsbx', 'targetversion'], 'tilingrun': ['tileversion', 'tilepid', 'programname']}
+        feature_exclude_dict = {}
     return tables, feature_exclude_dict
 
 

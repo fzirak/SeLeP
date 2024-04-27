@@ -4,6 +4,7 @@ from Configuration.config import Config
 import psycopg2
 import pandas as pd
 import subprocess
+import psycopg2.extensions
 from psycopg2.extras import LoggingConnection, LoggingCursor
 import logging
 

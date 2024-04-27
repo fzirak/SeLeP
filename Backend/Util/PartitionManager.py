@@ -4,6 +4,7 @@ from .BackendUtilFunctions import *
 from Configuration.config import Config
 from typing import Dict
 import numpy as np
+import pandas as pd
 
 from ..Database.LRUCache import LRUCache
 
@@ -27,8 +28,6 @@ class Partition:
             return
         block_encodings = []
         tbnames = set([item.rsplit('_', 1)[0] for item in self.blocks])
-        if len(tbnames) > 1:
-            print("\tdiff tbs")
         for block in self.blocks:
             erb = calculate_block_matrix_encoding(block, encoding_length, num_of_tbs, table_manager)
             if erb is None:
@@ -83,9 +82,6 @@ class PartitionManager:
                     blocks = {}
                 self.partitions[partition_id] = Partition(partition_id, blocks)
         self.increasing_index = len(self.partitions)
-
-    def read_loads_from_files(self):
-        pass
 
     def get_max_pid(self):
         numbers = [int(key[1:]) for key in self.partitions.keys()]
@@ -194,3 +190,17 @@ class PartitionManager:
         for b_id in p_block_list:
             lst.append(b_id)
         return lst
+
+    def get_partition_size_dict(self):
+        par_sizes = {}
+        for par in self.partitions:
+            par_sizes[par] = len(self.partitions[par].blocks)
+        
+        return par_sizes
+
+    def get_partition_size(self, pid):
+        if pid not in self.partitions:
+            print(f'{pid} not in pmanager')
+            return -1
+        return len(self.partitions[pid].blocks)
+    

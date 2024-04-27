@@ -13,7 +13,7 @@ from Backend.Util.TraditionalModelWindow import TraditionalModelWindow
 from Utils import PCACalculator as pca_c
 from Backend.Util import Table, TableManager, PartitionManager, AffinityMatrix
 from Backend.Database import helpers as db_helper
-from Configuration.config import Config
+from Configuration.config import Config, alter_config
 import _pickle as cPickle
 
 import Utils.utilFunction as general_util
@@ -62,13 +62,20 @@ def get_tables_pca(accuracy=0.95):
     return tables_pca
 
 
-def create_table_manager(read_from_file, latent_dim, epoch_no, file_path=''):
+def create_table_manager(read_from_file, latent_dim, epoch_no, file_path='', fsuffix=''):
     if file_path == '':
         file_path = f'./SavedFiles/TableManagers/{Config.db_name}table_managerB{Config.logical_block_size}P{Config.max_partition_size}.p'
+    
+    total_encoding_time = 0
+    pca_time = 0
 
     if not read_from_file:
         table_manager = TableManager.TableManager()
+        total_start_time = time.time()
+        start_time = time.time()
         tables_pca = get_tables_pca()
+        end_time = time.time()
+        pca_time = end_time - start_time
 
         for tb_pca in tables_pca:
             print(f'in create table manager, working on {tb_pca.table_name}')
@@ -81,8 +88,12 @@ def create_table_manager(read_from_file, latent_dim, epoch_no, file_path=''):
             print(f'added {new_table.name} to table manager')
         # all tables have their blocks pca value, using these values and the autoencoder
         # calculate the encoding of the blocks
-        table_manager.calculate_table_encodings(latent_dim, epoch_no)
+        start_time = time.time()
+        table_manager.calculate_table_encodings(latent_dim, epoch_no, encoding_method=Config.tb_encoding_method)
+        end_time = time.time()
+        total_encoding_time += (end_time - start_time)
         cPickle.dump(table_manager, open(file_path, 'wb'))
+        total_end_time = time.time()
         return table_manager
     return cPickle.load(open(file_path, 'rb'))
 
@@ -128,8 +139,6 @@ def create_pm_af_for_configs(read_par_manager, read_aff_matrix, table_manager, s
     file_suffix = f'{suffix}B{Config.logical_block_size}P{Config.max_partition_size}'
     if 'adapt' in suffix:
         file_name = f'{Config.db_name}_adapt_partitions{suffix[6:]}B{Config.logical_block_size}P{Config.max_partition_size}.txt'
-        print("'adapt' in suffix")
-        print(file_name)
     else:
         f'{Config.db_name}pManager_{file_suffix}.txt'
 
@@ -138,12 +147,14 @@ def create_pm_af_for_configs(read_par_manager, read_aff_matrix, table_manager, s
         aff_matrix = AffinityMatrix.AffinityMatrix()
         return partition_manager, aff_matrix
     else:
+        total_start_time = time.time()
         partition_manager = PartitionManager.PartitionManager()
         partition_manager.read_partitions_from_file(
             f'{file_name}'
         )
         partition_manager.calculate_partition_encodings(table_manager)
         aff_matrix = AffinityMatrix.AffinityMatrix()
+        total_end_time = time.time()
         cPickle.dump(partition_manager, open(f'./SavedFiles/PartitionManager/{Config.db_name}partition_manager32{file_suffix}.p', 'wb'))
         return partition_manager, aff_matrix
 
@@ -217,7 +228,7 @@ def adapt_test(config_suffix, method, test_repeat=1, measure_time=False, save_to
     res_hit_miss = []
     ns = 0
     
-    for batch_i in range(ns,16):
+    for batch_i in range(ns,20):
         config_suffix = f'{config_suffix_}{batch_i}'
         if batch_i > 0:
             print(f'Getting the components for batch {batch_i}')
@@ -539,6 +550,9 @@ def other_methods_run_main(methods: List[str], save_to_file=True, result_base_pa
     partition_manager, aff_matrix = create_par_manager_and_aff_matrix(
         read_par_manager=read_par_manager, read_aff_matrix=read_aff_matrix, table_manager=table_manager)
 
+    if read_tb_manager == 0:
+        set_block_pid(partition_manager, table_manager)
+    
     for method in methods:
         print(f'method {method}')
         method_res = {}
@@ -570,23 +584,6 @@ def other_methods_run_main(methods: List[str], save_to_file=True, result_base_pa
             pprint.pprint(method_res)
 
 
-def main1(result_base_path='./', save_res_to_file=True):
-    Config.tb_bid_range = get_tables_bid_range()
-    Config.actual_tb_bid_range = get_tables_actual_bid_range()
-    read_tb_manager = 1
-    read_par_manager = 1
-    read_aff_matrix = 1
-
-    table_manager: TableManager = create_table_manager(
-        read_tb_manager, Config.encoding_length, Config.encoding_epoch_no, file_path='')
-    print(table_manager.tables.keys())
-    
-    partition_manager, aff_matrix = create_par_manager_and_aff_matrix(
-        read_par_manager=read_par_manager, read_aff_matrix=read_aff_matrix, table_manager=table_manager)
-
-    set_block_pid(partition_manager, table_manager) #sdss_1_navi_table_manager.p
-
-
 def set_block_pid(partition_manager, table_manager, file_name=''):
     if file_name == '':
         file_name = f'{Config.db_name}table_managerB{Config.logical_block_size}P{Config.max_partition_size}.p'
@@ -601,7 +598,6 @@ def set_block_pid(partition_manager, table_manager, file_name=''):
 
 if __name__ == '__main__':
     result_base_path = os.path.join(Config.base_dir, 'Results')
-    # main1(result_base_path=result_base_path, save_res_to_file=True)
     methods = [
             # 'NP',
             # 'Rerun',

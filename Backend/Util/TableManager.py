@@ -10,9 +10,9 @@ class TableManager:
     def add_table(self, tb):
         self.tables[tb.name] = tb
 
-    def calculate_table_encodings(self, latent_dim, epoch_no):
+    def calculate_table_encodings(self, latent_dim, epoch_no, encoding_method):
         for table in self.tables.values():
-            table.calculate_table_block_encoding(latent_dim, epoch_no)
+            table.calculate_table_block_encoding(latent_dim, epoch_no, encoding_method)
 
     def get_block_encoding(self, table_name, block_name):
         # TODO: solve this issue

@@ -90,6 +90,7 @@ class LRUCache:
             'total_access': self.get_total_access(),
             'total_prefetches': self.total_pres,
             'hits': self.hit_count,
-            'hit_ratio': self.get_hit_ratio()
+            'hit_ratio': self.get_hit_ratio(),
+            'final_cache_usage': len(self.cache)
         }
         return res

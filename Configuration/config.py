@@ -1,4 +1,3 @@
-
 import os
 
 
@@ -34,6 +33,10 @@ class Config:
     encoding_epoch_no = 100
     do_normalisation = False
     look_back = 4
+    do_string_encoding = True
+    str_encoding_dim = 8
+    is_test = False
+    tb_encoding_method = ''
 
     """ system config """
     block_level_query_encoding = False
@@ -66,4 +69,7 @@ class Config:
 def alter_config(dbname='sdss_1', max_par_size=64, tb_lookup_fp='/navi_tableLookUp.txt'):
     Config.db_name = dbname
     Config.max_partition_size = max_par_size
-    Config.table_lookup_file_path = tb_lookup_fp
+    Config.table_lookup_file_path = os.path.join(Config.base_dir, f"Data/{dbname}_tableLookUp.txt")
+    table_list, table_lookup = read_table_lookups(Config.table_lookup_file_path)
+    Config.table_list = table_list
+    Config.table_lookup = table_lookup
