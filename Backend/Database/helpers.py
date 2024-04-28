@@ -71,6 +71,14 @@ def get_block_indexes(table_name):
     df = pd.DataFrame(cursor.fetchall(), columns=[desc[0] for desc in cursor.description])
     return df
 
+def get_distinct_block_indexes(table_name):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    sql = ('select distinct (ctid::text::point)[0]::bigint/{} as block_number\n'
+           '             from {};').format(Config.logical_block_size, table_name)
+    cursor.execute(sql)
+    df = pd.DataFrame(cursor.fetchall(), columns=[desc[0] for desc in cursor.description])
+    return df
 
 def insert_block_to_cache(insertion_dict):
     conn = get_db_connection()

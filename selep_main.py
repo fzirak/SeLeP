@@ -29,9 +29,9 @@ from Backend.Models.LSTM import *
 
 
 cache_size = 0
-read_tb_manager = 1
-read_par_manager = 1
-read_aff_matrix = 1
+read_tb_manager = 0
+read_par_manager = 0
+read_aff_matrix = 0
 b_level = False
 base_model_file_dir = "./SavedFiles/Models/"
 result_base_path = './Results'
@@ -707,7 +707,7 @@ if __name__ == '__main__':
 
     # NAVI
     model_names = ['binary_cross_entropy2']
-    result_file_names = ['binary_lstm2', 'binary_navi']
+    result_file_names = ['binary_lstm2']
 
     # test_partitioning_configs(model_name=model_names[5], result_file_name=result_file_names[4])
     # test_different_k(list(range(1, 45, 3)), model_name=model_names[1], result_file_name=f'{result_file_names[1]}4GB')

@@ -26,7 +26,7 @@ class AffinityMatrix:
                         freqs[temp[0]] = float(temp[1])
                 self.affinities[block_id] = AffinityEntry(block_id, '', freqs, access_count)
 
-    def update_affinities(self, b_id, result_set):
+    def update_affinities(self, b_id, result_set, b_manager=None, res_size_limit=10000):
         aff_entry = self.affinities.get(b_id)
         if aff_entry is None:
             # print(f'aff mat does not have {b_id}. adding it')
@@ -34,12 +34,19 @@ class AffinityMatrix:
 
         total_blocks = len(result_set)
         aff_entry.increment_access_count()
-        for cb_id in result_set:
-            if cb_id == b_id:
-                continue
-            aff_entry.update_frequency(cb_id, total_blocks)
-        self.affinities[b_id] = aff_entry
-        # print(f'{b_id} was added to aff mat')
+        if total_blocks > res_size_limit:
+            b_pid = b_manager.get_block_partition(b_id)
+            cb_pid = b_manager.get_block_partition(cb_id)
+            for cb_id in result_set:
+                if cb_id == b_id or b_pid != cb_pid:
+                    continue
+                aff_entry.update_frequency(cb_id, total_blocks)    
+        else:
+            for cb_id in result_set:
+                if cb_id == b_id:
+                    continue
+                aff_entry.update_frequency(cb_id, total_blocks)
+            self.affinities[b_id] = aff_entry
         
     def __str__(self):
         return str(self.affinities)
@@ -79,6 +86,49 @@ class AffinityMatrix:
         #     return False
         return True
 
+    
+    def multiply_weights(self, weight_reset_threshold):
+        for key, aff_entry in self.affinities.items():
+            aff_entry.freqs = {k: (weight_reset_threshold * v) if v is not None else None for k, v in aff_entry.freqs.items()}
+            self.affinities[key] = aff_entry
+
+    def get_affinity(self, bid, bid2):
+        if bid not in self.affinities:
+            return None
+        elif bid2 not in self.affinities.get(bid).freqs:
+            return None
+        return self.affinities.get(bid).freqs.get(bid2)
+
+    def get_tile_access_count(self, bid):
+        if bid in self.affinities:
+            return self.affinities[bid].access_count
+        return 0
+
+    def get_most_co_accessed_p(self, bid, b_manager, p, m):
+        block_freqs = self.affinities[bid].get_sorted_freqs()
+        for block, freq in block_freqs.items():
+            if b_manager.get_block_partition(block) != p and block not in m:
+                return block
+        return ""
+
+    def get_most_co_accessed_par_for_tile(self, bid, b_manager):
+        p = b_manager.get_block_partition(bid)
+        tile_freqs = self.affinities[bid].get_freqs()
+        partition_freqs = {}
+        max_freq = 0
+        max_p = ""
+        for block, freq in tile_freqs.items():
+            tfp = b_manager.get_block_partition(block)
+            if tfp != p:
+                if tfp in partition_freqs:
+                    partition_freqs[tfp] += freq
+                else:
+                    partition_freqs[tfp] = freq
+                if partition_freqs[tfp] > max_freq:
+                    max_freq = partition_freqs[tfp]
+                    max_p = tfp
+        return max_p
+
 
 class AffinityEntry:
     decimal_digit = 6
@@ -108,3 +158,10 @@ class AffinityEntry:
         new_freq = prev_freq + added_freq if prev_freq is not None else added_freq
         # print(f'block {self.b_id}, set new freq for {cb_id} = {new_freq}')
         self.freqs[cb_id] = new_freq
+
+    def get_sorted_freqs(self):
+        freqs = sorted(self.freqs.items(), key=lambda x: x[1], reverse=True)
+        return freqs
+
+    def get_freqs(self):
+        return self.freqs

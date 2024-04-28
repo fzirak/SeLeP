@@ -20,6 +20,7 @@ class Partition:
                 blocks_.append(bid)
         self.blocks = blocks_
         self.encoding = None
+        self.load = 0
 
     def calculate_encoding(self, table_manager, num_of_tbs, encoding_length=32):
         if len(self.blocks) == 0:
@@ -55,6 +56,38 @@ class Partition:
             # self.encoding = np.zeros((len(Config.table_list), 2 * Config.encoding_length))
 
         self.encoding = update_encoding_aggregation(self.encoding, block_encoding, len(self.blocks) - 1)
+    
+        
+    def calculate_load(self, a_matrix:AffinityMatrix.AffinityMatrix, k):
+        load = 0
+        for bid in self.blocks:
+            block_affinityEntry = a_matrix.get_block_aff_entry(bid)
+            if block_affinityEntry is None:
+                continue
+
+            for key, value in block_affinityEntry.freqs.items():
+                if key in self.blocks:
+                    continue
+                load += k * value
+
+        return load
+    
+    def get_hottest_block(self, a_matrix:AffinityMatrix.AffinityMatrix):
+        max_exit_freq = 0
+        res = ""
+        for block in self.blocks:
+            block_affinity_entry = a_matrix.get_block_affinities(block)
+            exit_freq = 0
+            if block_affinity_entry is None:
+                continue
+            for key, value in block_affinity_entry.freqs.items():
+                if key in self.blocks:
+                    continue
+                exit_freq += value
+            if exit_freq > max_exit_freq:
+                max_exit_freq = exit_freq
+                res = block
+        return res
 
 
 class PartitionManager:
@@ -63,6 +96,7 @@ class PartitionManager:
         self.loads = {}
         self.increasing_index = 0
         self.partition_graph: DictBasedAdjacencyMatrix = DictBasedAdjacencyMatrix()
+        loads = {}
 
     def read_partitions_from_file(self, file_path):
         with open(file_path, 'r') as file:
@@ -162,6 +196,10 @@ class PartitionManager:
     def add_partition(self, new_partition: Partition):
         self.partitions[new_partition.partition_id] = new_partition
 
+    def add_partition_with_load(self, new_partition: Partition, load):
+        new_partition.load = load
+        self.partitions[new_partition.partition_id] = new_partition
+
     def has_partition(self, partition_id):
         return partition_id in self.partitions
 
@@ -203,4 +241,32 @@ class PartitionManager:
             print(f'{pid} not in pmanager')
             return -1
         return len(self.partitions[pid].blocks)
+    
+    def update_loads(self, pids, a_matrix, k):
+        for pid in pids:
+            if pid not in self.partitions:
+                continue
+            self.loads[pid] = self.partitions[pid].calculate_load(a_matrix, k)
+
+    def get_overload_partitions(self, max_partition_load):
+        partition_load = {}
+        for pid in self.partitions:
+            if pid not in self.loads:
+                continue
+
+            if self.loads[pid] > max_partition_load:
+                partition_load[pid] = self.loads[pid]
+            
+        sorted_items = sorted(partition_load.items(), key=lambda x: x[1])
+        sorted_dict = dict(sorted_items)
+        return sorted_dict
+    
+    def get_least_filled_partition(self):
+        least_cap = float('inf')
+        res_partition = ""
+        for p in self.partitions.values():
+            if p.get_size() < least_cap:
+                least_cap = p.get_size()
+                res_partition = p.partition_id
+        return res_partition
     
